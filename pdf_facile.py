@@ -2,15 +2,18 @@
 import tkinter as tk
 import fitz  # PyMuPDF
 from tkinter import filedialog
-
+from utils import extract_annotations, save_to_excel, clear_markings
 
 # Defining global variables here
 current_page = 0
 rect = None
 doc = None
+start_x = None
+start_y = None
 pdf_page_size = (0, 0)
+marked_areas = []
 
-# The body of the code containing all the functions
+# The body of the code containing all the functions, starts here
 def on_button_click():
     print("Button clicked!")
 
@@ -29,16 +32,38 @@ zoom_level = 1.0
 def zoom_in():
     global zoom_level
     zoom_level += 0.3
+    # Scale all items (including rectangles) on the canvas
+    canvas.scale("all", 0, 0, 1.3, 1.3)
     render_page(current_page)
 
 def zoom_out():
     global zoom_level
     if zoom_level > 0.3:
         zoom_level -= 0.3
+        # Scale all items (including rectangles) on the canvas
+        canvas.scale("all", 0, 0, 0.9, 0.9)
         render_page(current_page)
 
+def next_page():
+    global current_page
+    total_pages = len(doc)
+    if current_page < total_pages - 1:
+        current_page +=1
+        render_page(current_page)
+
+def previous_page():
+    global current_page
+    if current_page > 0:
+        current_page -= 1
+        render_page(current_page)
+
+def clear_all_markings():
+    global marked_areas
+    canvas.delete("marking")
+    marked_areas.clear()
+
 def render_page(page_number):
-    global pdf_page_size, current_page, doc
+    global pdf_page_size, current_page, doc, marked_areas
     pdf_page = doc[page_number]
     pdf_page_size = (pdf_page.rect.width, pdf_page.rect.height)
     page = doc[page_number]
@@ -47,82 +72,100 @@ def render_page(page_number):
     pdf_image = tk.PhotoImage(file="temp.png")
     canvas.create_image(0, 0, anchor=tk.NW, image=pdf_image)
     canvas.image = pdf_image
+    redraw_marked_areas()
+    
+def redraw_marked_areas():
+    for area in marked_areas:
+        x0, y0, x1, y1 = area
+        # Adjust the coordinates for the current zoom level
+        x0 *= zoom_level
+        y0 *= zoom_level
+        x1 *= zoom_level
+        y1 *= zoom_level
+        canvas.create_rectangle(x0, y0, x1, y1, outline="green", tag='marking')
 
-def next_page():
-    global current_page
-    if current_page < len(doc) - 1:
-        render_page(current_page + 1)
-
-def previous_page():
-    global current_page
-    if current_page > 0:
-        render_page(current_page - 1)
 
 def on_canvas_click(event):
     global start_x, start_y
-    start_x, start_y = event.x, event.y
-    canvas.create_rectangle(start_x, start_y, start_x, start_y, outline='red', tag='marking')
+    start_x, start_y = canvas.canvasx(event.x), canvas.canvasy(event.y)
+    if rect:
+        canvas.delete(rect)
+    rect = canvas.create_rectangle(start_x, start_y, start_x, start_y, outline='red', width=4, stipple='gray50', tag="dragging")
 
 def on_canvas_drag(event):
-    global start_x, start_y, rect
-    canvas.delete(rect)
-    
-    # Adjust for zoom level
-    adjusted_end_x = start_x + (event.x - start_x) / zoom_level
-    adjusted_end_y = start_y + (event.y - start_y) / zoom_level
-    
-    rect = canvas.create_rectangle(start_x, start_y, adjusted_end_x, adjusted_end_y, outline="red")
+    global rect
+    current_x, current_y = canvas.canvasx(event.x), canvas.canvasy(event.y)
+    if rect:
+        canvas.delete(rect)
+    rect = canvas.create_rectangle(start_x, start_y, current_x, current_y, outline='red', width=4, stipple='gray50', tag="dragging")
+#start_x, start_y = None, None
 
 def on_canvas_release(event):
-    # At this point, you'd typically store the coordinates, but for now, we're just printing them.
-    end_x, end_y = event.x, event.y
-    print(f"Coordinates: {start_x}, {start_y}, {end_x}, {end_y}")
+    global start_x, start_y, rect, doc, zoom_level, marked_areas
+    
+    end_x, end_y = canvas.canvasx(event.x), canvas.canvasy(event.y)
+
+    # Convert to original PDF dimensions for extraction
+    pdf_start_x, pdf_start_y = start_x / zoom_level, start_y / zoom_level
+    pdf_end_x, pdf_end_y = end_x / zoom_level, end_y / zoom_level
+
+    # Make sure start is always the top-left corner
+    if pdf_start_x > pdf_end_x:
+        pdf_start_x, pdf_end_x = pdf_end_x, pdf_start_x
+    if pdf_start_y > pdf_end_y:
+        pdf_start_y, pdf_end_y = pdf_end_y, pdf_start_y
+    page = doc[current_page]
+    rect = (pdf_start_x, pdf_start_y, pdf_end_x, pdf_end_y)
+    extracted_text = page.get_text("text", clip=rect)
+
+    if event.state & 0x1:  
+        print(f"Column Header Selected: {extracted_text}")
+    else:
+        print(extracted_text)
+
+    # Visualize the selection and then immediately delete the marking
+    visualize_selection((start_x, start_y, end_x, end_y))
+    
+    # Remove any existing red dragging rectangle and green marking rectangle
+    canvas.delete('dragging')
+    canvas.delete('marking')
+    green_rect = visualize_selection((start_x, start_y, end_x, end_y))
+    canvas.after(3000, lambda: canvas.delete(green_rect))  # Delete after 3 seconds
+    # Remember the marked area
+    #original_coords = (start_x, start_y, end_x, end_y)
+    #marked_areas.append(original_coords)
+
+    start_x, start_y = None, None
 
 def extract_text_from_area(start, end):
     global current_page, doc
-
-    # Scale the coordinates from canvas size to PDF size
-    # Here, the assumption is that the PDF fits perfectly into the canvas
-    # If there's any scaling applied to fit the PDF into the canvas, this needs to be considered
     scale = pdf_page_size[0] / canvas.winfo_width()
-
-    # Convert the start and end coordinates to a PyMuPDF rectangle
     rect = fitz.Rect(start[0] * scale, start[1] * scale, end[0] * scale, end[1] * scale)
-
-    # Extract text
     page = doc[current_page]
     text = page.get_text("text", clip=rect)
-
     return text
 
-def visualize_selection(rect):
-    """Visualizes the calculated selection."""
-    # Extract the rectangle's coordinates
-    x0, y0, x1, y1 = rect
-
-    # Draw a semi-transparent rectangle for visualization
-    canvas.create_rectangle(x0, y0, x1, y1, outline="green", dash=(4, 4))
-
-def on_canvas_release(event):
-    global start_x, start_y, rect, zoom_level
-
-    end_x, end_y = canvas.canvasx(event.x), canvas.canvasy(event.y)
-    
-    if rect:
-        canvas.delete(rect)
-    
-    # Calculate region based on zoom level and user selection
-    doc_rect = fitz.Rect(start_x / zoom_level, start_y / zoom_level, end_x / zoom_level, end_y / zoom_level)
-
-    # Extract text from this region
-    page = doc.load_page(current_page)
-    extracted_text = page.get_text("text", clip=doc_rect)
-    print(extracted_text)
-    
-    # After extracting text, visualize the calculated selection
-    visualize_selection((start_x, start_y, end_x, end_y))
+def visualize_selection(rect_coords):
+    x0, y0, x1, y1 = rect_coords
+    canvas.create_rectangle(x0, y0, x1, y1, outline="green", width=2, tag='marking')
 
 
+
+def on_key_press(event):
+    global shift_pressed
+    if event.keysym == 'Shift_L' or event.keysym == 'Shift_R':
+        shift_pressed = True
+
+def on_key_release(event):
+    global shift_pressed
+    if event.keysym == 'Shift_L' or event.keysym == 'Shift_R':
+        shift_pressed = False
+
+def on_mouse_wheel(event):
+    if event.delta > 0:
+        zoom_in()
+    else:
+        zoom_out()
 
 # All the design aspects of the main application window and UI components goes here
 
@@ -165,17 +208,20 @@ side_frame.pack(side=tk.RIGHT, padx=20, pady=20, fill=tk.BOTH)
 pdf_button = tk.Button(side_frame, text="Open PDF",  bg="black", fg="white", command=open_pdf, width=20)
 pdf_button.pack(pady=20)
 
-idle_button = tk.Button(side_frame, text="Idle button",  bg="black", fg="white", command=on_button_click)
-idle_button.pack(pady=20)
+clear_all_button = tk.Button(side_frame, text="Clear All",bg="black", fg="white", command=clear_all_markings, width=20)
+clear_all_button.pack(pady=20)
 
 exit_button = tk.Button(side_frame, text="Exit",  bg="black", fg="white", command=root.quit, width=20)
 exit_button.pack(pady=20)
 
 # Mouse section
 
-canvas.bind("<Button-1>", on_canvas_click)     # Bind left mouse button click
-canvas.bind("<B1-Motion>", on_canvas_drag)     # Bind dragging with left mouse button held down
+canvas.bind("<ButtonPress-1>", on_canvas_click)     # Bind left mouse button click
+canvas.bind("<B1-Motion>", on_canvas_drag)  # Bind dragging with left mouse button held down
 canvas.bind("<ButtonRelease-1>", on_canvas_release) # Bind release of left mouse button
-
+canvas.bind("<MouseWheel>", on_mouse_wheel)
+canvas.bind("<KeyPress>", on_key_press)
+canvas.bind("<KeyRelease>", on_key_release)
+canvas.focus_set()
 
 root.mainloop()
