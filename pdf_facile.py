@@ -89,9 +89,22 @@ def previous_page():
         render_page(current_page)
 
 def clear_all_markings():
-    global marked_areas
-    canvas.delete("marking")
-    marked_areas.clear()
+    global marked_areas, data_for_excel, last_selected_header
+    marked_areas = {}
+    data_for_excel = {}
+    last_selected_header = None
+
+    # Clear the canvas markings
+    canvas.delete('marking')
+
+    # Clear the Excel preview (Treeview)
+    clear_treeview(tree)
+
+    
+#  This function will clear all rows from the Treeview.
+def clear_treeview(tree):
+    for row in tree.get_children():
+        tree.delete(row)
 
 
 def handle_save():
