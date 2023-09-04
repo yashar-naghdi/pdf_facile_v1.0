@@ -3,6 +3,8 @@ import tkinter as tk
 import fitz  # PyMuPDF
 from tkinter import filedialog
 from utils import extract_annotations, save_to_excel, clear_markings
+import tkinter.filedialog as filedialog
+from tkinter import messagebox
 
 # Defining global variables here
 current_page = 0
@@ -11,7 +13,7 @@ doc = None
 start_x = None
 start_y = None
 pdf_page_size = (0, 0)
-marked_areas = []
+marked_areas = {}
 
 # The body of the code containing all the functions, starts here
 def on_button_click():
@@ -62,6 +64,19 @@ def clear_all_markings():
     canvas.delete("marking")
     marked_areas.clear()
 
+
+def handle_save():
+    annotations = extract_annotations(doc, marked_areas)  # Using global variables
+    if not annotations:
+        tk.messagebox.showinfo("Info", "No annotations to save.")
+        return
+    save_path = filedialog.asksaveasfilename(defaultextension=".xlsx", filetypes=[("Excel files", "*.xlsx")])
+    if not save_path:
+        return
+    save_to_excel(annotations, save_path)
+    tk.messagebox.showinfo("Success", f"Annotations saved to {save_path}")
+
+
 def render_page(page_number):
     global pdf_page_size, current_page, doc, marked_areas
     pdf_page = doc[page_number]
@@ -75,14 +90,15 @@ def render_page(page_number):
     redraw_marked_areas()
     
 def redraw_marked_areas():
-    for area in marked_areas:
-        x0, y0, x1, y1 = area
-        # Adjust the coordinates for the current zoom level
-        x0 *= zoom_level
-        y0 *= zoom_level
-        x1 *= zoom_level
-        y1 *= zoom_level
-        canvas.create_rectangle(x0, y0, x1, y1, outline="green", tag='marking')
+    for page_num, areas in marked_areas.items():
+        if page_num == current_page:
+            for area in areas:
+                x0, y0, x1, y1 = area
+                x0 *= zoom_level
+                y0 *= zoom_level
+                x1 *= zoom_level
+                y1 *= zoom_level
+                canvas.create_rectangle(x0, y0, x1, y1, outline="green", tag='marking')
 
 
 def on_canvas_click(event):
@@ -108,6 +124,11 @@ def on_canvas_release(event):
     # Convert to original PDF dimensions for extraction
     pdf_start_x, pdf_start_y = start_x / zoom_level, start_y / zoom_level
     pdf_end_x, pdf_end_y = end_x / zoom_level, end_y / zoom_level
+
+ # Store rectangle in marked_areas
+    if current_page not in marked_areas:
+        marked_areas[current_page] = []
+    marked_areas[current_page].append((pdf_start_x, pdf_start_y, pdf_end_x, pdf_end_y))
 
     # Make sure start is always the top-left corner
     if pdf_start_x > pdf_end_x:
@@ -205,13 +226,17 @@ zoom_in_button.grid(row=1, column=1, padx=5, pady=5)
 side_frame = tk.Frame(root, bg="light blue", width=400)
 side_frame.pack(side=tk.RIGHT, padx=20, pady=20, fill=tk.BOTH)
 
-pdf_button = tk.Button(side_frame, text="Open PDF",  bg="black", fg="white", command=open_pdf, width=20)
+pdf_button = tk.Button(side_frame, text="Open PDF",  bg="black", fg="white", command=open_pdf, width=standard_button_side)
 pdf_button.pack(pady=20)
 
-clear_all_button = tk.Button(side_frame, text="Clear All",bg="black", fg="white", command=clear_all_markings, width=20)
+save_button = tk.Button(side_frame, text="Save",  bg="black", fg="white",command=handle_save, width= standard_button_side)
+save_button.pack(pady=20)  # Adjust row and column as needed
+
+
+clear_all_button = tk.Button(side_frame, text="Clear All",bg="black", fg="white", command=clear_all_markings, width=standard_button_side)
 clear_all_button.pack(pady=20)
 
-exit_button = tk.Button(side_frame, text="Exit",  bg="black", fg="white", command=root.quit, width=20)
+exit_button = tk.Button(side_frame, text="Exit",  bg="black", fg="white", command=root.quit, width=standard_button_side)
 exit_button.pack(pady=20)
 
 # Mouse section

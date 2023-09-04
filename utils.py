@@ -8,7 +8,6 @@ import pandas as pd
 
 def extract_annotations(doc, marked_areas):
     annotations = []
-
     for page_num, areas in marked_areas.items():
         page = doc[page_num]
         for area in areas:
@@ -19,8 +18,9 @@ def extract_annotations(doc, marked_areas):
                 "coords": area,
                 "text": text.strip()
             })
-
     return annotations
+
+
 #This function will save the extracted annotations to an Excel file using the pandas library.
 def save_to_excel(annotations, filename="annotations.xlsx"):
     df = pd.DataFrame(annotations)
