@@ -5,3 +5,4 @@ start_x = None
 start_y = None
 pdf_page_size = (0, 0)
 marked_areas = {}
+last_selected_header = None
