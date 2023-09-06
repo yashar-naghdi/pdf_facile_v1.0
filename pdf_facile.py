@@ -22,7 +22,7 @@ marked_areas = {}
 last_selected_header= None
 data_for_excel = {}
 all_rectangles = {}
-
+zoom_level = 1.0
 # The body of the code containing all the functions, starts here
 def on_button_click():
     print("Button clicked!")
@@ -36,8 +36,6 @@ def open_pdf():
     
     doc = fitz.open(pdf_path)
     render_page(0)
-
-zoom_level = 1.0
 
 def zoom_in():
     global zoom_level
@@ -264,6 +262,18 @@ def on_mouse_wheel(event):
 def save_to_excel(filename):
     df.to_excel(filename, index=False)
 
+def scroll_left(event):
+    canvas.xview_scroll(-1, "units")
+
+def scroll_right(event):
+    canvas.xview_scroll(1, "units")
+
+def move_up(event=None):
+    canvas.yview_scroll(-1, "units")
+
+def move_down(event=None):
+    canvas.yview_scroll(1, "units")
+
 # This function will be responsible for updating the Treeview (Excel preview) based on the PDF annotations.
 def update_treeview(data):
     # Clear the treeview
@@ -356,6 +366,11 @@ canvas.bind("<ButtonRelease-1>", on_canvas_release) # Bind release of left mouse
 canvas.bind("<MouseWheel>", on_mouse_wheel)
 canvas.bind("<KeyPress>", on_key_press)
 canvas.bind("<KeyRelease>", on_key_release)
+canvas.bind("<Left>", scroll_left)
+canvas.bind("<Right>", scroll_right)
+canvas.bind("<Up>", move_up)
+canvas.bind("<Down>", move_down)
+
 canvas.focus_set()
 
 root.mainloop()
