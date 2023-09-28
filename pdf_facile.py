@@ -3,7 +3,8 @@ import tkinter as tk
 import fitz  # PyMuPDF
 from tkinter import filedialog, ttk, PanedWindow , Frame
 # Assuming the utils module is available and contains the necessary functions
-
+#import pillow as PIL
+from PIL import Image, ImageTk
 from utils import extract_annotations, save_to_excel, clear_markings
 import tkinter.filedialog as filedialog
 from tkinter import messagebox
@@ -21,6 +22,7 @@ class PDFApp:
         self.root = root
         self.current_page = 0
         self.current_column = 0
+        self.column_indices = {}
         self.rect = None
         self.doc = None
         self.start_x = None
@@ -39,6 +41,8 @@ class PDFApp:
         self.marking_steps = []
         self.marked_info = []
         self.num_columns=10
+        print("Number of Columns:", self.num_columns)  # Debugging print
+        self.tree = None
         self.headers = [""] * self.num_columns  # We use this to remember the header of each column
         self.shift_pressed = False
         self.marked_areas = {}
@@ -50,8 +54,11 @@ class PDFApp:
         self.setup_ui()
         self.rows = [self.tree.insert("", "end", values=("",) * self.num_columns) for _ in range(10)]
         self.row_index = 1  # Initialize row_index if you are using it
-        self.column_indices = {}
         self.placeholders = [self.tree.insert("", "end", values=("",) * self.num_columns) for _ in range(self.num_columns)]
+        
+        print("Length of Placeholders:", len(self.placeholders))
+        print("Placeholders:", self.placeholders)
+
     
     def on_canvas_click(self, event):
         
@@ -266,52 +273,65 @@ class PDFApp:
         self.data_entries.append(data_entry)
         self.line_counts.append(len(extracted_lines))
         
-        # This following section is the mosr delicate and the heart of our application
+        # This following section is the most delicate and the heart of our application
         
         # If shift is held, set the last selected line as a new header
         if event.state & 0x1:  # Shift key held during drag (Choosing a header)
             extracted_header = ' '.join(extracted_lines)
-        
+            #print(f"Extracted Header: {extracted_header}")
+
         # Only update if it's a new header, otherwise continue using the current column
             if extracted_header not in self.headers:
+                
+                # Update the header for the current column
+                #placeholder_index = 0
+                
+                #print(f"Corrected Placeholder Index for {extracted_header}: {placeholder_index}")
+                
                 self.headers[self.current_column] = extracted_header
-                self.column_indices[extracted_header] = 1  # Initialize the index for this column
-            
-            # Inserting at the top of the Treeview as a new row
+                
+                self.column_indices[extracted_header] = 0  # Initialize the index for this column
+                
+                #print(f"Header Index for {extracted_header}: {self.column_indices[extracted_header]}")
+                placeholder_index = self.current_column
+                # Update the header in the Treeview
                 self.tree.item(self.placeholders[self.current_column], values=("",) * self.current_column + (extracted_header,) + ("",) * (self.num_columns - self.current_column - 1))
-                self.column_indices[extracted_header] += 1  # Update the index for this column
-            else:
-                self.current_column = self.headers.index(extracted_header)  # Use the column of the existing header
+                
+                  # Correct the Placeholder Index
+                
+                #print(f"Placeholder Index for {extracted_header}: {self.tree.index(self.placeholders[self.current_column])}")
+                # Move to the next column after inserting a new header
+                
         else:  # Data selection
             header = self.headers[self.current_column]  # Get the header for the current column
+            
+            #print(f"Current Header: {header}")
+
             # If there's a header set for the column, insert the data under it
             if header:
                 if header not in self.data_for_excel:
+                    
                     self.data_for_excel[header] = []
+                
                 self.data_for_excel[header].extend(extracted_lines)
                      
                             # Inserting data under the header in the Treeview
                 for line in extracted_lines:
-                    self.tree.insert("", self.column_indices[header], values=("",) * self.current_column + (line,) + ("",) * (self.num_columns - self.current_column - 1))
+                    #print(f"Data Index for {header}: {self.column_indices[header]}")
+                    self.tree.insert("", self.column_indices[header]+1 , values=("",) * self.current_column + (line,) + ("",) * (self.num_columns - self.current_column - 1))
                     self.column_indices[header] += 1  # Update the index for this column
                     #added some print statements to check the data
 
-                    #print(f"Data added under header {header}: {extracted_lines}")
-                    #print("Current self.data_for_excel:", self.data_for_excel)
-            
-            # After inserting data, prepare for a new header (move to the next column)
+                
+        # After inserting data, prepare for a new header (move to the next column)
             if self.current_column < self.num_columns - 1:
-                self.current_column += 1
-        
-        
+                self.current_column += 1       
 
         # Visualize the selection and remove existing rectangles
         self.canvas.delete('dragging')
         green_rect = self.visualize_selection((self.start_x, self.start_y, self.end_x, self.end_y))
         self.green_rectangles.append(green_rect)
         self.update_treeview(self.data_for_excel)
-
-
 
     def extract_text_from_area(self, start, end):
         
@@ -320,17 +340,6 @@ class PDFApp:
         page = self.doc[self.current_page]
         text = page.get_text("text", clip=self.rect)
         return text
-
-    """def add_data(self, header, value, is_header):
-        if is_header:
-            self.data[header] = [value]  # Start a new column with a header
-        else:
-            if header in self.data:
-                self.data[header].append(value)  # Add value to existing column
-            else:
-                print("Error: Adding value to a non-existent header!")
-        self.update_treeview(self.data)"""
-
 
     def visualize_selection(self, rect_coords):
         x0, y0, x1, y1 = rect_coords
@@ -349,9 +358,9 @@ class PDFApp:
 
     def on_mouse_wheel(self, event):
         if event.delta > 0:
-            self.zoom_in()
+                    self.zoom_in()
         else:
-            self.zoom_out()
+                    self.zoom_out()
 
     def save_to_excel(self, filename):
         self.df.to_excel(filename, index=False)
@@ -373,6 +382,7 @@ class PDFApp:
         # Clear the treeview
         for item in self.tree.get_children():
             if item not in self.placeholders:
+                #print(f"Deleting Item: {item}")
                 self.tree.delete(item)
         
         # Find max length to align the columns
@@ -393,6 +403,7 @@ class PDFApp:
         
         # Insert the new rows
         for entry in transposed_data:
+            print(f"Inserting Row: {entry}")
             self.tree.insert("", "end", values=entry)
     
 
@@ -400,6 +411,10 @@ class PDFApp:
         # Overall container for pane and side_frame
         self.container = tk.Frame(self.root)
         self.container.pack(fill=tk.BOTH, expand=True)
+
+        # Adding a scrollbar to the container
+        self.scrollbar = tk.Scrollbar(self.container, orient='vertical')
+        self.scrollbar.pack(side='right', fill='y')
 
         self.pane = tk.PanedWindow(self.container, orient=tk.HORIZONTAL)
         self.pane.pack(side=tk.LEFT, fill=tk.BOTH, expand=1)
@@ -412,7 +427,7 @@ class PDFApp:
 
         for col in columns:
             self.tree.heading(col, text=col)
-            self.tree.column(col, width=45) 
+            self.tree.column(col, width=60) 
 
         self.tree.pack(fill=tk.BOTH, expand=1)
         self.pane.add(self.excel_frame)
@@ -424,11 +439,14 @@ class PDFApp:
         self.pdf_frame.pack(fill=tk.BOTH, expand=True)
         self.pane.add(self.pdf_outer_frame)
 
-         # Create placeholder items for each column in the Treeview
+        # Create placeholder items for each column in the Treeview
         self.placeholders = [self.tree.insert("", "end", values=("",) * self.num_columns) for _ in range(1)]  # Only one placeholder row for headers
+        #print(f"Placeholders: {self.placeholders}")
 
-        self.canvas = tk.Canvas(self.pdf_frame, bg="white", width=595, height=842)  # Size for A4 page
+        #self.canvas = tk.Canvas(self.pdf_frame, bg="white", width=595, height=842)  # Size for A4 page
+        self.canvas = tk.Canvas(self.pdf_frame, bg="white", width=595, height=650, yscrollcommand=self.scrollbar.set)  # Size for A4 page
         self.canvas.pack(fill=tk.BOTH, expand=True)
+        self.scrollbar.config(command=self.canvas.yview)
 
         # Event bindings for canvas
         self.canvas.bind("<ButtonPress-1>", self.on_canvas_click)
@@ -444,26 +462,28 @@ class PDFApp:
         self.canvas.focus_set()
 
         # Navigation Frame below the PDF Canvas
-        self.nav_frame = tk.Frame(self.pdf_outer_frame, bg="light blue")
+        self.nav_frame = tk.Frame(self.pdf_outer_frame, bg="#6ee2f5")
         self.nav_frame.pack(pady=20)
 
+        #screen_width = self.root.winfo_screenwidth()
+        
         #setting standard button size
         standard_button_below = 20
         standard_button_side = 10
         # Buttons section
-        self.previous_button = tk.Button(self.nav_frame, text="Previous", command=self.previous_page, width=standard_button_below)
+        self.previous_button = tk.Button(self.nav_frame, text="Previous",  bg="black", fg="white",command=self.previous_page, width=standard_button_below)
         self.previous_button.grid(row=0, column=0, padx=5, pady=5)
 
-        self.zoom_out_button = tk.Button(self.nav_frame, text="Zoom Out", command=self.zoom_out, width=standard_button_below)
+        self.zoom_out_button = tk.Button(self.nav_frame, text="Zoom Out", bg="black", fg="white", command=self.zoom_out, width=standard_button_below)
         self.zoom_out_button.grid(row=1, column=0, padx=5, pady=5)
 
-        self.next_button = tk.Button(self.nav_frame, text="Next", command=self.next_page, width=standard_button_below)
+        self.next_button = tk.Button(self.nav_frame, text="Next", bg="black", fg="white",command=self.next_page, width=standard_button_below)
         self.next_button.grid(row=0, column=1, padx=5, pady=5)
 
-        self.zoom_in_button = tk.Button(self.nav_frame, text="Zoom In", command=self.zoom_in, width=standard_button_below)
+        self.zoom_in_button = tk.Button(self.nav_frame, text="Zoom In", bg="black", fg="white", command=self.zoom_in, width=standard_button_below)
         self.zoom_in_button.grid(row=1, column=1, padx=5, pady=5)
 
-        self.side_frame = tk.Frame(self.container, bg="light blue", width=400)
+        self.side_frame = tk.Frame(self.container, bg="#6ee2f5", width=500)
         self.side_frame.pack(side=tk.RIGHT, padx=20, pady=20, fill=tk.Y)
 
         self.pdf_button = tk.Button(self.side_frame, text="Open PDF", bg="black", fg="white", command=self.open_pdf, width=standard_button_side)
@@ -481,8 +501,28 @@ class PDFApp:
         self.exit_button = tk.Button(self.side_frame, text="Exit", bg="black", fg="white", command=self.root.quit, width=standard_button_side)
         self.exit_button.pack(pady=20)
 
+
+        self.root.iconbitmap("D:\pdf_facile\design elements\logo_saumon.ico")
+        self.root.title("PDF Facile")
+        pass
  #All the design aspects of the main application window and UI components goes here
+    def show_startup_image(self):
+        # Create a new top-level window
+        startup_window = tk.Toplevel(self.root)
+        
+        # Load and show the image
+        image = Image.open("D:\pdf_facile\design elements\logo-package\png\logo-color.png")
+        photo = ImageTk.PhotoImage(image)
+        label = tk.Label(startup_window, image=photo)
+        label.image = photo  # Keep a reference to avoid garbage collection
+        label.pack()
+
+        # Close the startup window after 1000 milliseconds (1 second)
+        startup_window.after(2000, startup_window.destroy)
+
 
 root = tk.Tk()
 app = PDFApp(root)
+# Show the startup image
+app.show_startup_image()
 root.mainloop()
