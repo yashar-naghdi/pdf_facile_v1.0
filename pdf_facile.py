@@ -12,8 +12,7 @@ import pandas as pd
 import itertools
 import os
 import sys
-
-
+import re
 
 # Setting the Class skeleton for the application
 class PDFApp:
@@ -56,9 +55,7 @@ class PDFApp:
         self.row_index = 1  # Initialize row_index if you are using it
         self.placeholders = [self.tree.insert("", "end", values=("",) * self.num_columns) for _ in range(self.num_columns)]
         
-        print("Length of Placeholders:", len(self.placeholders))
-        print("Placeholders:", self.placeholders)
-
+        
     
     def on_canvas_click(self, event):
         
@@ -66,7 +63,6 @@ class PDFApp:
         if self.rect:
             self.canvas.delete(self.rect)
         self.rect = self.canvas.create_rectangle(self.start_x, self.start_y, self.start_x, self.start_y, outline='red', width=4, stipple='gray50', tag="dragging")
-
 
 # The body of the code containing all the functions, starts here
     def on_button_click(self):
@@ -94,7 +90,6 @@ class PDFApp:
             self.zoom_level -= 0.3
             self.render_page(self.current_page)  # First, render the page at the new zoom level
             self.adjust_annotations_for_zoom(0.9)  # Next, adjust the annotations
-
 
     def adjust_annotations_for_zoom(self,scale_factor):
         if self.current_page not in self.all_rectangles:
@@ -164,7 +159,6 @@ class PDFApp:
         for i in range(0, int(self.canvas['height']), grid_spacing_y):
             self.canvas.create_line(0, i, int(self.canvas['width']), i,fill=grid_color, tag="grid_line")
 
-
     def toggle_grid(self):
         if self.grid_visible:
             self.canvas.delete("grid_line")
@@ -199,8 +193,6 @@ class PDFApp:
         df.to_excel(save_path, index=False)
         tk.messagebox.showinfo("Success", f"Data saved to {save_path}")
 
-
-
     def render_page(self,page_number):
         
         # Clear the canvas
@@ -234,8 +226,6 @@ class PDFApp:
                     y1 *= self.zoom_level
                     self.canvas.create_rectangle(x0, y0, x1, y1, outline="green", tag='marking')
 
-
-
     def on_canvas_drag(self, event):
         
         current_x, current_y = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
@@ -243,6 +233,23 @@ class PDFApp:
             self.canvas.delete(self.rect)
         self.rect = self.canvas.create_rectangle(self.start_x, self.start_y, current_x, current_y, outline='red', width=4, stipple='gray50', tag="dragging")
 
+    def format_name(self, name):
+    # Remove any titles
+        name_without_title = re.sub(r'\b(Monsieur|Mme\.|Madame|M\.)\b', '', name).strip()
+        
+        # Split the name into words
+        parts = name_without_title.split()
+        
+        # Identify the last name (all CAPS) and first name
+        last_name_parts = [part for part in parts if part.isupper()]
+        first_name_parts  = [part for part in parts if part not in last_name_parts]
+        
+        # If we couldn't identify parts clearly, return the original
+        if not last_name_parts  or not first_name_parts:
+            return name
+        
+        # Combine and return in the desired format
+        return ' '.join(last_name_parts  + first_name_parts).upper()
 
     def on_canvas_release(self,event):
         
@@ -270,9 +277,18 @@ class PDFApp:
         
         extracted_lines = [line for line in extracted_text.strip().splitlines() if line.strip() != ""]
         data_entry = [self.last_selected_header] + extracted_lines
+        
+            # Check if the extracted text is intended to be a name (i.e., it's in the first column)
+        is_name_column = self.current_column == 0
+
+        # If extracting names, format them
+        if is_name_column:
+            extracted_lines = [self.format_name(line) for line in extracted_lines]
+
         self.data_entries.append(data_entry)
         self.line_counts.append(len(extracted_lines))
-        
+
+            
         # This following section is the most delicate and the heart of our application
         
         # If shift is held, set the last selected line as a new header
@@ -283,9 +299,7 @@ class PDFApp:
         # Only update if it's a new header, otherwise continue using the current column
             if extracted_header not in self.headers:
                 
-                # Update the header for the current column
-                #placeholder_index = 0
-                
+
                 #print(f"Corrected Placeholder Index for {extracted_header}: {placeholder_index}")
                 
                 self.headers[self.current_column] = extracted_header
@@ -341,10 +355,11 @@ class PDFApp:
         text = page.get_text("text", clip=self.rect)
         return text
 
+
+
     def visualize_selection(self, rect_coords):
         x0, y0, x1, y1 = rect_coords
         self.canvas.create_rectangle(x0, y0, x1, y1, outline="green", width=2, tag='marking')
-
 
     def on_key_press(self, event):
         
@@ -365,10 +380,10 @@ class PDFApp:
     def save_to_excel(self, filename):
         self.df.to_excel(filename, index=False)
 
-    def scroll_left(self, event):
+    def scroll_left(self, event=None ):
         self.canvas.xview_scroll(-1, "units")
 
-    def scroll_right(self, event):
+    def scroll_right(self, event=None):
         self.canvas.xview_scroll(1, "units")
 
     def move_up(self,event=None):
@@ -421,11 +436,14 @@ class PDFApp:
 
         # Left side - Excel-like preview
         self.excel_frame = tk.Frame(self.pane)
-        num_columns = 6
+        num_columns = 7
         columns = [f"Col{i}" for i in range(1, num_columns + 1)]
         self.tree = ttk.Treeview(self.excel_frame, columns=columns, show='headings')
 
-        for col in columns:
+        # Change the heading of the first column to "Name"
+        self.tree.heading("Col1", text="Name")
+
+        for col in columns[1:]:
             self.tree.heading(col, text=col)
             self.tree.column(col, width=60) 
 
@@ -459,6 +477,12 @@ class PDFApp:
         self.canvas.bind("<Right>", self.scroll_right)
         self.canvas.bind("<Up>", self.move_up)
         self.canvas.bind("<Down>", self.move_down)
+        
+        self.canvas.bind("<KeyPress-z>", self.move_up)  # Equivalent to Up Arrow
+        self.canvas.bind("<KeyPress-s>", self.move_down)  # Equivalent to Down Arrow
+        self.canvas.bind("<KeyPress-q>", self.scroll_left)  # Equivalent to Left Arrow
+        self.canvas.bind("<KeyPress-d>", self.scroll_right)  # Equivalent to Right Arrow
+        
         self.canvas.focus_set()
 
         # Navigation Frame below the PDF Canvas
@@ -501,24 +525,34 @@ class PDFApp:
         self.exit_button = tk.Button(self.side_frame, text="Exit", bg="black", fg="white", command=self.root.quit, width=standard_button_side)
         self.exit_button.pack(pady=20)
 
-
-        self.root.iconbitmap("D:\pdf_facile\design elements\logo_saumon.ico")
+        self.root.iconbitmap("design elements\\logo_saumon.ico")
         self.root.title("PDF Facile")
-        pass
- #All the design aspects of the main application window and UI components goes here
+        
     def show_startup_image(self):
         # Create a new top-level window
         startup_window = tk.Toplevel(self.root)
-        
+        # Set the window size and position to be the same as the main app
+        window_width = 600  # Width of your main app window
+        window_height = 600  # Height of your main app window
+        # Get screen width and height
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        # Calculate position x and y coordinates
+        x = (screen_width/2) - (window_width/2)
+        y = (screen_height/2) - (window_height/2)
+
+        startup_window.geometry(f"{window_width}x{window_height}+{int(x)}+{int(y)}")
+        startup_window.overrideredirect(True)  # Remove window decorations
+
         # Load and show the image
-        image = Image.open("D:\pdf_facile\design elements\logo-package\png\logo-color.png")
+        image = Image.open("design elements\\start2.png")
         photo = ImageTk.PhotoImage(image)
         label = tk.Label(startup_window, image=photo)
         label.image = photo  # Keep a reference to avoid garbage collection
         label.pack()
 
         # Close the startup window after 1000 milliseconds (1 second)
-        startup_window.after(2000, startup_window.destroy)
+        startup_window.after(300, startup_window.destroy)
 
 
 root = tk.Tk()
