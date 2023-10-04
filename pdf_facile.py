@@ -40,7 +40,7 @@ class PDFApp:
         self.marking_steps = []
         self.marked_info = []
         self.num_columns=10
-        print("Number of Columns:", self.num_columns)  # Debugging print
+        
         self.tree = None
         self.headers = [""] * self.num_columns  # We use this to remember the header of each column
         self.shift_pressed = False
@@ -235,8 +235,8 @@ class PDFApp:
 
     def format_name(self, name):
     # Remove any titles
-        name_without_title = re.sub(r'\b(Monsieur|Mme\.|Madame|M\.)\b', '', name).strip()
-        
+        name_without_title = re.sub(r'\b(Monsieur|Mme\.|Madame|M\.)\s+\b', '', name).strip()
+    
         # Split the name into words
         parts = name_without_title.split()
         
@@ -278,7 +278,7 @@ class PDFApp:
         extracted_lines = [line for line in extracted_text.strip().splitlines() if line.strip() != ""]
         data_entry = [self.last_selected_header] + extracted_lines
         
-            # Check if the extracted text is intended to be a name (i.e., it's in the first column)
+        # Check if the extracted text is intended to be a name (i.e., it's in the first column)
         is_name_column = self.current_column == 0
 
         # If extracting names, format them
@@ -298,7 +298,6 @@ class PDFApp:
 
         # Only update if it's a new header, otherwise continue using the current column
             if extracted_header not in self.headers:
-                
 
                 #print(f"Corrected Placeholder Index for {extracted_header}: {placeholder_index}")
                 
@@ -310,9 +309,7 @@ class PDFApp:
                 placeholder_index = self.current_column
                 # Update the header in the Treeview
                 self.tree.item(self.placeholders[self.current_column], values=("",) * self.current_column + (extracted_header,) + ("",) * (self.num_columns - self.current_column - 1))
-                
-                  # Correct the Placeholder Index
-                
+                            
                 #print(f"Placeholder Index for {extracted_header}: {self.tree.index(self.placeholders[self.current_column])}")
                 # Move to the next column after inserting a new header
                 
@@ -324,7 +321,7 @@ class PDFApp:
             # If there's a header set for the column, insert the data under it
             if header:
                 if header not in self.data_for_excel:
-                    
+
                     self.data_for_excel[header] = []
                 
                 self.data_for_excel[header].extend(extracted_lines)
@@ -354,8 +351,6 @@ class PDFApp:
         page = self.doc[self.current_page]
         text = page.get_text("text", clip=self.rect)
         return text
-
-
 
     def visualize_selection(self, rect_coords):
         x0, y0, x1, y1 = rect_coords
@@ -418,7 +413,7 @@ class PDFApp:
         
         # Insert the new rows
         for entry in transposed_data:
-            print(f"Inserting Row: {entry}")
+            #print(f"Inserting Row: {entry}")
             self.tree.insert("", "end", values=entry)
     
 
@@ -525,7 +520,7 @@ class PDFApp:
         self.exit_button = tk.Button(self.side_frame, text="Exit", bg="black", fg="white", command=self.root.quit, width=standard_button_side)
         self.exit_button.pack(pady=20)
 
-        self.root.iconbitmap("design elements\\logo_saumon.ico")
+        self.root.iconbitmap(r'D:\pdf_facile\logo_saumon.ico')
         self.root.title("PDF Facile")
         
     def show_startup_image(self):
@@ -545,14 +540,14 @@ class PDFApp:
         startup_window.overrideredirect(True)  # Remove window decorations
 
         # Load and show the image
-        image = Image.open("design elements\\start2.png")
+        image = Image.open(r'D:\pdf_facile\start2.png')
         photo = ImageTk.PhotoImage(image)
         label = tk.Label(startup_window, image=photo)
         label.image = photo  # Keep a reference to avoid garbage collection
         label.pack()
 
         # Close the startup window after 1000 milliseconds (1 second)
-        startup_window.after(300, startup_window.destroy)
+        startup_window.after(2500, startup_window.destroy)
 
 
 root = tk.Tk()
