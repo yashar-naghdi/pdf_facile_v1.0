@@ -11,8 +11,10 @@ from tkinter import messagebox
 import pandas as pd
 import itertools
 import os
-import sys
+#import sys
 import re
+import io
+
 
 # Setting the Class skeleton for the application
 class PDFApp:
@@ -134,6 +136,10 @@ class PDFApp:
         self.marked_areas = {}
         self.data_for_excel = {}
         self.last_selected_header = None
+        self.current_page = 0  # or whatever your initial page is
+        self.current_column = 0  # reset to the first column
+        self.headers = [None] * self.num_columns  # reset headers
+        self.column_indices = {}  # reset column indices
         # Clear the canvas markings
         self.canvas.delete('marking')
 
@@ -194,26 +200,27 @@ class PDFApp:
         tk.messagebox.showinfo("Success", f"Data saved to {save_path}")
 
     def render_page(self,page_number):
-        
-        # Clear the canvas
-        self.canvas.delete("all")
-
-        pdf_page = self.doc[page_number]
-        self.pdf_page_size = (pdf_page.rect.width, pdf_page.rect.height)
-        img = pdf_page.get_pixmap(matrix=fitz.Matrix(self.zoom_level, self.zoom_level))
-        img.save("temp.png")
-        pdf_image = tk.PhotoImage(file="temp.png")
-        self.canvas.create_image(0, 0, anchor=tk.NW, image=pdf_image)
-        self.canvas.image = pdf_image
-
-        # Call this AFTER rendering the page to ensure the rectangles are on top.
-        self.redraw_marked_areas()
-
-        # Once loaded into the canvas, delete the file
         try:
-            os.remove("temp.png")
+            # Clear the canvas
+            self.canvas.delete("all")
+
+            pdf_page = self.doc[page_number]
+            self.pdf_page_size = (pdf_page.rect.width, pdf_page.rect.height)
+            img = pdf_page.get_pixmap(matrix=fitz.Matrix(self.zoom_level, self.zoom_level))
+            img_data = img.tobytes("png")
+            
+            # Convert to a format Tkinter can use
+            image = Image.open(io.BytesIO(img_data))
+            photo = ImageTk.PhotoImage(image)
+
+            self.canvas.create_image(0, 0, anchor=tk.NW, image= photo)
+            self.canvas.image =  photo  # Keep a reference to avoid garbage collection
+
+            # Call this AFTER rendering the page to ensure the rectangles are on top.
+            self.redraw_marked_areas()
+
         except Exception as e:
-            print(f"Error removing temp.png: {e}")
+            print(f"Error rendering page: {e}")
 
     def redraw_marked_areas(self):
         for page_num, areas in self.marked_areas.items():
@@ -520,7 +527,12 @@ class PDFApp:
         self.exit_button = tk.Button(self.side_frame, text="Exit", bg="black", fg="white", command=self.root.quit, width=standard_button_side)
         self.exit_button.pack(pady=20)
 
-        self.root.iconbitmap(r'D:\pdf_facile\logo_saumon.ico')
+        # Get the current script directory
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        # Create a path to the icon relative to the script
+        icon_path = os.path.join(script_dir, 'logo_saumon.ico')
+
+        self.root.iconbitmap(icon_path)
         self.root.title("PDF Facile")
         
     def show_startup_image(self):
@@ -539,8 +551,14 @@ class PDFApp:
         startup_window.geometry(f"{window_width}x{window_height}+{int(x)}+{int(y)}")
         startup_window.overrideredirect(True)  # Remove window decorations
 
+
+        # Get the current script directory
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        # Create a path to the image relative to the script
+        image_path = os.path.join(script_dir, 'start2.png')
+
         # Load and show the image
-        image = Image.open(r'D:\pdf_facile\start2.png')
+        image = Image.open(image_path)
         photo = ImageTk.PhotoImage(image)
         label = tk.Label(startup_window, image=photo)
         label.image = photo  # Keep a reference to avoid garbage collection

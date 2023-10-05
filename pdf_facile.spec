@@ -3,9 +3,9 @@
 
 a = Analysis(
     ['pdf_facile.py'],
-    pathex=[],
+    pathex=['D:\\pdf_facile'],
     binaries=[],
-    datas=[],
+    datas=[('logo_saumon.ico', '.'), ('start2.png', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -34,4 +34,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+
 )
