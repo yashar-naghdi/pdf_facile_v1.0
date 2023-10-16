@@ -34,7 +34,7 @@ class PDFApp:
         self.marked_areas = {}
         self.last_selected_header= None
         self.all_rectangles = {}
-        self.zoom_level = 1.0
+        self.zoom_level = 1.0  # 1.0 means 100%, i.e., no zoom.
         self.last_marked_item = []
         self.green_rectangles = []
         self.data_entries = []
@@ -85,6 +85,7 @@ class PDFApp:
         self.zoom_level += 0.3
         self.render_page(self.current_page)  # First, render the page at the new zoom level
         self.adjust_annotations_for_zoom(1.3)  # Next, adjust the annotations
+        
 
     def zoom_out(self):
         
@@ -92,6 +93,7 @@ class PDFApp:
             self.zoom_level -= 0.3
             self.render_page(self.current_page)  # First, render the page at the new zoom level
             self.adjust_annotations_for_zoom(0.9)  # Next, adjust the annotations
+       
 
     def adjust_annotations_for_zoom(self,scale_factor):
         if self.current_page not in self.all_rectangles:
@@ -149,21 +151,21 @@ class PDFApp:
     def draw_grid(self):
         # Clear any existing grid lines
         self.canvas.delete("grid_line")
-
+    
         # Define the spacing for the grid (e.g., every 50 pixels)
-        grid_spacing_y = 20
-        grid_spacing_x = 80
+        grid_spacing_y = 20* self.zoom_level  # Adjust for zoom
+        grid_spacing_x = 80* self.zoom_level  # Adjust for zoom
         
         # Define the color with reduced opacity (in this case, light green with 50% opacity)
         grid_color = '#D1F5D1'  # Light green
-
+        extension_factor = 4
         # Draw vertical lines
-        for i in range(0, int(self.canvas['width']), grid_spacing_x):
-            self.canvas.create_line(i, 0, i, int(self.canvas['height']),fill=grid_color, tag="grid_line")
+        for i in range(0, int(self.canvas['width'])*extension_factor, int(grid_spacing_x)):
+            self.canvas.create_line(i, 0, i, int(self.canvas['height'])*extension_factor,fill=grid_color, tag="grid_line")
 
         # Draw horizontal lines
-        for i in range(0, int(self.canvas['height']), grid_spacing_y):
-            self.canvas.create_line(0, i, int(self.canvas['width']), i,fill=grid_color, tag="grid_line")
+        for i in range(0, int(self.canvas['height'])*extension_factor, int(grid_spacing_y)):
+            self.canvas.create_line(0, i, int(self.canvas['width'])*extension_factor, i,fill=grid_color, tag="grid_line")
 
     def toggle_grid(self):
         if self.grid_visible:
@@ -174,7 +176,7 @@ class PDFApp:
             self.grid_visible = True
 
     def handle_save(self):
-        print("Data for Excel:", self.data_for_excel)
+        
         # Check if there's data to save
         if not self.data_for_excel or all(len(data) == 0 for data in self.data_for_excel.values()):
             tk.messagebox.showinfo("Info", "No data to save.")
@@ -208,7 +210,7 @@ class PDFApp:
             self.pdf_page_size = (pdf_page.rect.width, pdf_page.rect.height)
             img = pdf_page.get_pixmap(matrix=fitz.Matrix(self.zoom_level, self.zoom_level))
             img_data = img.tobytes("png")
-            
+
             # Convert to a format Tkinter can use
             image = Image.open(io.BytesIO(img_data))
             photo = ImageTk.PhotoImage(image)
@@ -240,9 +242,15 @@ class PDFApp:
             self.canvas.delete(self.rect)
         self.rect = self.canvas.create_rectangle(self.start_x, self.start_y, current_x, current_y, outline='red', width=4, stipple='gray50', tag="dragging")
 
+    def transform_decimal_separator(self, text):
+        # This regular expression matches numbers with a period as the decimal separator
+        pattern = r'(\d+\.\d+)'
+        transformed_text = re.sub(pattern, lambda m: m.group(1).replace('.', ','), text)
+        return transformed_text
+
     def format_name(self, name):
     # Remove any titles
-        name_without_title = re.sub(r'\b(Monsieur|Mme\.|Madame|M\.)\s+\b', '', name).strip()
+        name_without_title = re.sub(r'(?:\b|^)(Monsieur|Mme\.|Madame|M\.|Mademoiselle)\s+', '', name).strip()
     
         # Split the name into words
         parts = name_without_title.split()
@@ -281,7 +289,8 @@ class PDFApp:
         page = self.doc[self.current_page]
         self.rect = (pdf_start_x, pdf_start_y, pdf_end_x, pdf_end_y)
         extracted_text = page.get_text("text", clip=self.rect)
-        
+        extracted_text = self.transform_decimal_separator(extracted_text)  # Apply the transformation
+
         extracted_lines = [line for line in extracted_text.strip().splitlines() if line.strip() != ""]
         data_entry = [self.last_selected_header] + extracted_lines
         
@@ -302,7 +311,10 @@ class PDFApp:
         if event.state & 0x1:  # Shift key held during drag (Choosing a header)
             extracted_header = ' '.join(extracted_lines)
             #print(f"Extracted Header: {extracted_header}")
-
+            # Update last_selected_header to the newly extracted header
+            self.last_selected_header = extracted_header
+            self.current_column = self.headers.index(extracted_header) if extracted_header in self.headers else self.current_column
+            
         # Only update if it's a new header, otherwise continue using the current column
             if extracted_header not in self.headers:
 
@@ -311,39 +323,35 @@ class PDFApp:
                 self.headers[self.current_column] = extracted_header
                 
                 self.column_indices[extracted_header] = 0  # Initialize the index for this column
-                
-                #print(f"Header Index for {extracted_header}: {self.column_indices[extracted_header]}")
+                              
                 placeholder_index = self.current_column
                 # Update the header in the Treeview
                 self.tree.item(self.placeholders[self.current_column], values=("",) * self.current_column + (extracted_header,) + ("",) * (self.num_columns - self.current_column - 1))
-                            
-                #print(f"Placeholder Index for {extracted_header}: {self.tree.index(self.placeholders[self.current_column])}")
-                # Move to the next column after inserting a new header
                 
         else:  # Data selection
-            header = self.headers[self.current_column]  # Get the header for the current column
+            header = self.headers[self.current_column] if self.last_selected_header is not None else self.headers[self.current_column] # Get the header for the current column
             
             #print(f"Current Header: {header}")
-
             # If there's a header set for the column, insert the data under it
             if header:
                 if header not in self.data_for_excel:
-
                     self.data_for_excel[header] = []
-                
+                if header not in self.column_indices:
+                    self.column_indices[header] = 0
                 self.data_for_excel[header].extend(extracted_lines)
-                     
-                            # Inserting data under the header in the Treeview
+                
+                # Inserting data under the header in the Treeview
                 for line in extracted_lines:
                     #print(f"Data Index for {header}: {self.column_indices[header]}")
                     self.tree.insert("", self.column_indices[header]+1 , values=("",) * self.current_column + (line,) + ("",) * (self.num_columns - self.current_column - 1))
                     self.column_indices[header] += 1  # Update the index for this column
                     #added some print statements to check the data
 
-                
-        # After inserting data, prepare for a new header (move to the next column)
+                #print(f"Data in Treeview after adding data: {[self.tree.item(child)['values'] for child in self.tree.get_children('')]}")
+
+            # After inserting data, prepare for a new header (move to the next column)
             if self.current_column < self.num_columns - 1:
-                self.current_column += 1       
+                self.current_column += 1 
 
         # Visualize the selection and remove existing rectangles
         self.canvas.delete('dragging')
@@ -497,34 +505,34 @@ class PDFApp:
         standard_button_below = 20
         standard_button_side = 10
         # Buttons section
-        self.previous_button = tk.Button(self.nav_frame, text="Previous",  bg="black", fg="white",command=self.previous_page, width=standard_button_below)
+        self.previous_button = tk.Button(self.nav_frame, text="Page précédente",  bg="black", fg="white",command=self.previous_page, width=standard_button_below)
         self.previous_button.grid(row=0, column=0, padx=5, pady=5)
 
-        self.zoom_out_button = tk.Button(self.nav_frame, text="Zoom Out", bg="black", fg="white", command=self.zoom_out, width=standard_button_below)
+        self.zoom_out_button = tk.Button(self.nav_frame, text="Zoom arrière", bg="black", fg="white", command=self.zoom_out, width=standard_button_below)
         self.zoom_out_button.grid(row=1, column=0, padx=5, pady=5)
 
-        self.next_button = tk.Button(self.nav_frame, text="Next", bg="black", fg="white",command=self.next_page, width=standard_button_below)
+        self.next_button = tk.Button(self.nav_frame, text="Page suivante", bg="black", fg="white",command=self.next_page, width=standard_button_below)
         self.next_button.grid(row=0, column=1, padx=5, pady=5)
 
-        self.zoom_in_button = tk.Button(self.nav_frame, text="Zoom In", bg="black", fg="white", command=self.zoom_in, width=standard_button_below)
+        self.zoom_in_button = tk.Button(self.nav_frame, text="Zoom avant", bg="black", fg="white", command=self.zoom_in, width=standard_button_below)
         self.zoom_in_button.grid(row=1, column=1, padx=5, pady=5)
 
         self.side_frame = tk.Frame(self.container, bg="#6ee2f5", width=500)
         self.side_frame.pack(side=tk.RIGHT, padx=20, pady=20, fill=tk.Y)
 
-        self.pdf_button = tk.Button(self.side_frame, text="Open PDF", bg="black", fg="white", command=self.open_pdf, width=standard_button_side)
+        self.pdf_button = tk.Button(self.side_frame, text="Ouvrir", bg="black", fg="white", command=self.open_pdf, width=standard_button_side)
         self.pdf_button.pack(pady=20)
 
-        self.save_button = tk.Button(self.side_frame, text="Save", bg="black", fg="white", command=self.handle_save, width=standard_button_side)
+        self.save_button = tk.Button(self.side_frame, text="Enregistrer", bg="black", fg="white", command=self.handle_save, width=standard_button_side)
         self.save_button.pack(pady=20)
 
-        self.clear_all_button = tk.Button(self.side_frame, text="Clear All", bg="black", fg="white", command=self.clear_all_markings, width=standard_button_side)
+        self.clear_all_button = tk.Button(self.side_frame, text="Supprimer", bg="black", fg="white", command=self.clear_all_markings, width=standard_button_side)
         self.clear_all_button.pack(pady=20)
 
-        self.grid_button = tk.Button(self.side_frame, text="Grid", bg="black", fg="white", command=self.toggle_grid,width=standard_button_side)
+        self.grid_button = tk.Button(self.side_frame, text="Grille", bg="black", fg="white", command=self.toggle_grid,width=standard_button_side)
         self.grid_button.pack(pady=20)
 
-        self.exit_button = tk.Button(self.side_frame, text="Exit", bg="black", fg="white", command=self.root.quit, width=standard_button_side)
+        self.exit_button = tk.Button(self.side_frame, text="Fermer", bg="black", fg="white", command=self.root.quit, width=standard_button_side)
         self.exit_button.pack(pady=20)
 
         # Get the current script directory
