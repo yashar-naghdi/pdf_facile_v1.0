@@ -5,11 +5,9 @@ from tkinter import filedialog, ttk, PanedWindow , Frame
 # Assuming the utils module is available and contains the necessary functions
 #import pillow as PIL
 from PIL import Image, ImageTk
-from utils import extract_annotations, save_to_excel, clear_markings
 import tkinter.filedialog as filedialog
 from tkinter import messagebox
 import pandas as pd
-import itertools
 import os
 #import sys
 import re
@@ -148,6 +146,21 @@ class PDFApp:
         # Clear the Excel preview (Treeview)
         self.clear_treeview(self.tree)
 
+        # Reset the Treeview placeholders
+        self.reset_treeview_placeholders()
+
+    def clear_treeview(self, tree):
+        for item in tree.get_children():
+            tree.delete(item)
+
+    def reset_treeview_placeholders(self):
+        # Clear existing placeholders
+        for placeholder in self.placeholders:
+            if self.tree.exists(placeholder):
+                self.tree.delete(placeholder)
+        # Create new placeholders
+        self.placeholders = [self.tree.insert("", "end", values=("",) * self.num_columns) for _ in range(1)]  # Only one placeholder row for headers
+
     def draw_grid(self):
         # Clear any existing grid lines
         self.canvas.delete("grid_line")
@@ -179,7 +192,7 @@ class PDFApp:
         
         # Check if there's data to save
         if not self.data_for_excel or all(len(data) == 0 for data in self.data_for_excel.values()):
-            tk.messagebox.showinfo("Info", "No data to save.")
+            tk.messagebox.showinfo("Info", "Aucune donnée à sauvegarder.")
             return
         
         # Transpose the data to fit into a DataFrame.
@@ -199,7 +212,7 @@ class PDFApp:
         if not save_path:
             return
         df.to_excel(save_path, index=False)
-        tk.messagebox.showinfo("Success", f"Data saved to {save_path}")
+        tk.messagebox.showinfo("Success", f"Données enregistrées dans {save_path}")
 
     def render_page(self,page_number):
         try:
@@ -255,16 +268,41 @@ class PDFApp:
         # Split the name into words
         parts = name_without_title.split()
         
-        # Identify the last name (all CAPS) and first name
-        last_name_parts = [part for part in parts if part.isupper()]
-        first_name_parts  = [part for part in parts if part not in last_name_parts]
+        if all(part.isupper() for part in parts) or all(not part.isupper() for part in parts):
+            # For names not clearly distinguishable by case, assume last part is the last name
+            last_name_parts = [parts[-1]]
+            first_name_parts = parts[:-1]
+        else:
+            # Identify the last name (all CAPS) and first name
+            last_name_parts = [part for part in parts if part.isupper()]
+            first_name_parts  = [part for part in parts if part not in last_name_parts]
         
         # If we couldn't identify parts clearly, return the original
         if not last_name_parts  or not first_name_parts:
-            return name
+            return name.upper()
         
-        # Combine and return in the desired format
-        return ' '.join(last_name_parts  + first_name_parts).upper()
+        # Ensure last name is first and everything is uppercase
+        formatted_name = ' '.join(last_name_parts + first_name_parts).upper()
+        return formatted_name
+    
+    def format_number(self,data):
+        formatted_data = []
+        for entry in data:
+            # Remove spaces used for thousands
+            entry_no_spaces = entry.replace(" ", "")
+            # Replace comma with dot for decimals
+            entry_standardized_decimal = entry_no_spaces.replace(",", ".")
+            
+            # Check if the entry is a number after replacements
+            if re.match(r'^-?\d+(\.\d+)?$', entry_standardized_decimal):
+                # Convert to appropriate numeric type
+                if "." in entry_standardized_decimal:
+                    formatted_data.append(float(entry_standardized_decimal))
+                else:
+                    formatted_data.append(int(entry_standardized_decimal))
+            else:
+                formatted_data.append(entry)  # Keep as is if not a number
+        return formatted_data
 
     def on_canvas_release(self,event):
         
@@ -289,20 +327,20 @@ class PDFApp:
         page = self.doc[self.current_page]
         self.rect = (pdf_start_x, pdf_start_y, pdf_end_x, pdf_end_y)
         extracted_text = page.get_text("text", clip=self.rect)
-        extracted_text = self.transform_decimal_separator(extracted_text)  # Apply the transformation
-
+        
         extracted_lines = [line for line in extracted_text.strip().splitlines() if line.strip() != ""]
-        data_entry = [self.last_selected_header] + extracted_lines
+        formatted_lines = self.format_number(extracted_lines)
+        data_entry = [self.last_selected_header] + formatted_lines
         
         # Check if the extracted text is intended to be a name (i.e., it's in the first column)
         is_name_column = self.current_column == 0
 
         # If extracting names, format them
         if is_name_column:
-            extracted_lines = [self.format_name(line) for line in extracted_lines]
+            formatted_lines = [self.format_name(line) for line in formatted_lines]
 
         self.data_entries.append(data_entry)
-        self.line_counts.append(len(extracted_lines))
+        self.line_counts.append(len(formatted_lines))
 
             
         # This following section is the most delicate and the heart of our application
@@ -325,7 +363,13 @@ class PDFApp:
                 self.column_indices[extracted_header] = 0  # Initialize the index for this column
                               
                 placeholder_index = self.current_column
+                
                 # Update the header in the Treeview
+                # Ensure there are enough placeholders
+                while len(self.placeholders) <= self.current_column:
+                    new_placeholder = self.tree.insert("", "end", values=("",) * self.num_columns)
+                    self.placeholders.append(new_placeholder)
+
                 self.tree.item(self.placeholders[self.current_column], values=("",) * self.current_column + (extracted_header,) + ("",) * (self.num_columns - self.current_column - 1))
                 
         else:  # Data selection
@@ -338,10 +382,10 @@ class PDFApp:
                     self.data_for_excel[header] = []
                 if header not in self.column_indices:
                     self.column_indices[header] = 0
-                self.data_for_excel[header].extend(extracted_lines)
+                self.data_for_excel[header].extend(formatted_lines)
                 
                 # Inserting data under the header in the Treeview
-                for line in extracted_lines:
+                for line in formatted_lines:
                     #print(f"Data Index for {header}: {self.column_indices[header]}")
                     self.tree.insert("", self.column_indices[header]+1 , values=("",) * self.current_column + (line,) + ("",) * (self.num_columns - self.current_column - 1))
                     self.column_indices[header] += 1  # Update the index for this column
@@ -366,7 +410,8 @@ class PDFApp:
         page = self.doc[self.current_page]
         text = page.get_text("text", clip=self.rect)
         return text
-
+    
+    
     def visualize_selection(self, rect_coords):
         x0, y0, x1, y1 = rect_coords
         self.canvas.create_rectangle(x0, y0, x1, y1, outline="green", width=2, tag='marking')
@@ -451,7 +496,7 @@ class PDFApp:
         self.tree = ttk.Treeview(self.excel_frame, columns=columns, show='headings')
 
         # Change the heading of the first column to "Name"
-        self.tree.heading("Col1", text="Name")
+        self.tree.heading("Col1", text="Noms")
 
         for col in columns[1:]:
             self.tree.heading(col, text=col)
