@@ -15,7 +15,7 @@ pip install -r requirements.txt
 
 1. Run the main script:
 python pdf_facile.py
-
+Disclaimer: The tool is meant for French speaking users, hence I allow you to modify the text on the buttons, etc. at your own will :)
 
 2. Use the "Open PDF" button to select and view a PDF file.
 3. Navigate through pages using the "Next" and "Previous" buttons.
