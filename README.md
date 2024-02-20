@@ -21,7 +21,7 @@ You can also run directly the executable file or choose the run the python versi
 5. Use the grid for more accurate marking on the page.
 6. Marking on the PDF page while holding the Shift will add the headers.
 7. The first column is dedicated to extracting Names and formating it automatically to LAST NAME FIRST NAME
-8. Marking the page without holding shift will add the data under the header.
+8. Marking the page without holding the shift will add the data under the header.
 9. Marking number values will format them into Integers and Floats are automatically. 
 
 
@@ -32,8 +32,8 @@ You can also run directly the executable file or choose the run the python versi
 - Navigate through pages.
 - Zoom functionality.
 - Grid View
-- Name Formating
-- Data Formating
+- Name Formatting
+- Data Formatting
 
 
 ## Contributing
