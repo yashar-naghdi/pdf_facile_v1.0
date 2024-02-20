@@ -192,7 +192,7 @@ class PDFApp:
         
         # Check if there's data to save
         if not self.data_for_excel or all(len(data) == 0 for data in self.data_for_excel.values()):
-            tk.messagebox.showinfo("Info", "Aucune donnée à sauvegarder.")
+            tk.messagebox.showinfo("Info", "No data to save.")
             return
         
         # Transpose the data to fit into a DataFrame.
@@ -212,7 +212,7 @@ class PDFApp:
         if not save_path:
             return
         df.to_excel(save_path, index=False)
-        tk.messagebox.showinfo("Success", f"Données enregistrées dans {save_path}")
+        tk.messagebox.showinfo("Success", f"Data saved in {save_path}")
 
     def render_page(self,page_number):
         try:
@@ -496,7 +496,7 @@ class PDFApp:
         self.tree = ttk.Treeview(self.excel_frame, columns=columns, show='headings')
 
         # Change the heading of the first column to "Name"
-        self.tree.heading("Col1", text="Noms")
+        self.tree.heading("Col1", text="Names")
 
         for col in columns[1:]:
             self.tree.heading(col, text=col)
@@ -550,40 +550,40 @@ class PDFApp:
         standard_button_below = 20
         standard_button_side = 10
         # Buttons section
-        self.previous_button = tk.Button(self.nav_frame, text="Page précédente",  bg="black", fg="white",command=self.previous_page, width=standard_button_below)
+        self.previous_button = tk.Button(self.nav_frame, text="Previous Page",  bg="black", fg="white",command=self.previous_page, width=standard_button_below)
         self.previous_button.grid(row=0, column=0, padx=5, pady=5)
 
-        self.zoom_out_button = tk.Button(self.nav_frame, text="Zoom arrière", bg="black", fg="white", command=self.zoom_out, width=standard_button_below)
+        self.zoom_out_button = tk.Button(self.nav_frame, text="Zoom Back", bg="black", fg="white", command=self.zoom_out, width=standard_button_below)
         self.zoom_out_button.grid(row=1, column=0, padx=5, pady=5)
 
-        self.next_button = tk.Button(self.nav_frame, text="Page suivante", bg="black", fg="white",command=self.next_page, width=standard_button_below)
+        self.next_button = tk.Button(self.nav_frame, text="Next Page", bg="black", fg="white",command=self.next_page, width=standard_button_below)
         self.next_button.grid(row=0, column=1, padx=5, pady=5)
 
-        self.zoom_in_button = tk.Button(self.nav_frame, text="Zoom avant", bg="black", fg="white", command=self.zoom_in, width=standard_button_below)
+        self.zoom_in_button = tk.Button(self.nav_frame, text="Zoom In", bg="black", fg="white", command=self.zoom_in, width=standard_button_below)
         self.zoom_in_button.grid(row=1, column=1, padx=5, pady=5)
 
         self.side_frame = tk.Frame(self.container, bg="#6ee2f5", width=500)
         self.side_frame.pack(side=tk.RIGHT, padx=20, pady=20, fill=tk.Y)
 
-        self.pdf_button = tk.Button(self.side_frame, text="Ouvrir", bg="black", fg="white", command=self.open_pdf, width=standard_button_side)
+        self.pdf_button = tk.Button(self.side_frame, text="Open", bg="black", fg="white", command=self.open_pdf, width=standard_button_side)
         self.pdf_button.pack(pady=20)
 
-        self.save_button = tk.Button(self.side_frame, text="Enregistrer", bg="black", fg="white", command=self.handle_save, width=standard_button_side)
+        self.save_button = tk.Button(self.side_frame, text="Save", bg="black", fg="white", command=self.handle_save, width=standard_button_side)
         self.save_button.pack(pady=20)
 
-        self.clear_all_button = tk.Button(self.side_frame, text="Supprimer", bg="black", fg="white", command=self.clear_all_markings, width=standard_button_side)
+        self.clear_all_button = tk.Button(self.side_frame, text="Delete", bg="black", fg="white", command=self.clear_all_markings, width=standard_button_side)
         self.clear_all_button.pack(pady=20)
 
-        self.grid_button = tk.Button(self.side_frame, text="Grille", bg="black", fg="white", command=self.toggle_grid,width=standard_button_side)
+        self.grid_button = tk.Button(self.side_frame, text="Grid", bg="black", fg="white", command=self.toggle_grid,width=standard_button_side)
         self.grid_button.pack(pady=20)
 
-        self.exit_button = tk.Button(self.side_frame, text="Fermer", bg="black", fg="white", command=self.root.quit, width=standard_button_side)
+        self.exit_button = tk.Button(self.side_frame, text="Close", bg="black", fg="white", command=self.root.quit, width=standard_button_side)
         self.exit_button.pack(pady=20)
 
         # Get the current script directory
         script_dir = os.path.dirname(os.path.abspath(__file__))
         # Create a path to the icon relative to the script
-        icon_path = os.path.join(script_dir, 'logo_saumon.ico')
+        icon_path = os.path.join(script_dir, 'start.ico')
 
         self.root.iconbitmap(icon_path)
         self.root.title("PDF Facile")
