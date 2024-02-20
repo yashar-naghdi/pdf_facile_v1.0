@@ -5,7 +5,7 @@ A simple GUI-based tool to view and navigate PDF files, and Annotate parts of a 
 
 ## Installation
 
-1. Clone this repository: https://github.com/yashar-naghdi/pdf_facile
+1. Clone this repository: https://github.com/yashar-naghdi/pdf_facile_v1.0
 2. Navigate to the project directory: cd pdf_facile
 
 3. Install the required dependencies:
